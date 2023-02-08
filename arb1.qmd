@@ -1,0 +1,128 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+rm(list=ls()) 
+library(tidyverse)
+library(rjstat)
+library(httr)
+library(readr)
+library(zoo)
+```
+
+```{r}
+suppressWarnings({
+
+#dowloading data
+
+lower <- read_table("https://www.nsstc.uah.edu/data/msu/v6.0/tlt/uahncdc_lt_6.0.txt")
+midT <- read_table("https://www.nsstc.uah.edu/data/msu/v6.0/tmt/uahncdc_mt_6.0.txt")
+pause <- read_table("https://www.nsstc.uah.edu/data/msu/v6.0/tls/uahncdc_ls_6.0.txt")
+lowerS <- read_table("https://www.nsstc.uah.edu/data/msu/v6.0/tls/uahncdc_ls_6.0.txt")
+
+})
+```
+
+```{r}
+#selecting and keeping relevant columns
+
+lower = subset(lower, select = c(Year, Mo,Globe))
+lowerS = subset(lowerS, select = c(Year, Mo,Globe))
+midT = subset(midT, select = c(Year, Mo, Globe))
+pause = subset(pause, select = c(Year, Mo, Globe))
+```
+
+```{r}
+#changing values to numerics instead of character
+
+lower$Globe <- as.numeric(as.character(lower$Globe))
+lowerS$Globe <- as.numeric(as.character(lowerS$Globe))
+midT$Globe <- as.numeric(as.character(midT$Globe))
+pause$Globe <- as.numeric(as.character(pause$Globe))
+
+#calculating 12-month rolling average
+
+lower <- lower %>%
+  mutate('LTroposphare' = rollmean(Globe, k=13, fill=NA, align='right'))
+lowerS <- lowerS %>%
+  mutate('Lstratosphare' = rollmean(Globe, k=13, fill=NA, align='right'))
+midT <- midT %>%
+  mutate('Mid_troposphare' = rollmean(Globe, k=13, fill=NA, align='right'))
+pause <- pause %>%
+  mutate('Tropopause' = rollmean(Globe, k=13, fill=NA, align='right'))
+
+
+#making first of each month as date
+
+pause$Date <- as.Date(paste(pause$Year, pause$Mo, 1, sep="-"), format = "%Y-%m-%d")
+lower$Date <- as.Date(paste(lower$Year, pause$Mo, 1, sep="-"), format = "%Y-%m-%d")
+lowerS$Date <- as.Date(paste(lowerS$Year, pause$Mo, 1, sep="-"), format = "%Y-%m-%d")
+midT$Date <- as.Date(paste(midT$Year, pause$Mo, 1, sep="-"), format = "%Y-%m-%d")
+
+#removing irrelevant columns
+
+lower = subset(lower, select = -c(Year, Mo,Globe))
+lowerS = subset(lowerS, select = -c(Year, Mo,Globe))
+midT = subset(midT, select = -c(Year, Mo, Globe))
+pause = subset(pause, select = -c(Year, Mo, Globe))
+
+
+#merging dataframes 
+
+Average <- merge(lower,lowerS, by = 'Date', no.dups=TRUE)
+Average <- merge(Average,midT, by = 'Date', no.dups=TRUE)
+Average <- merge(Average,pause, by = 'Date', no.dups=TRUE)
+
+
+
+```
+
+```{r}
+#calculating the combined average 
+
+library(dplyr)
+
+Average <- Average %>% 
+   mutate('Combined Average' = rowMeans(across(LTroposphare:Lstratosphare:Tropopause:Mid_troposphare),na.rm=FALSE))
+
+
+#plotting lower stratosphare (read note under last code block)
+
+Average %>%
+  ggplot(aes(x=Date, y= Lstratosphare))+
+  geom_line(col='red')+
+  labs(y='Lower stratosphare', title = '12 month moving average of Lower stratosphare')
+
+#pivoting for plotting
+
+Average <- Average %>%
+  pivot_longer(2:6, names_to = "var", values_to = "value")
+
+#plot
+
+Average %>%
+  filter(Date > '1981-01-01')%>%
+  ggplot(aes(x=Date, y=value, col=var))+
+  geom_line()+
+  labs(y= 'Average temperature',title = '12-month moving average and combined mean temperature', subtitle = 'Lower troposphare, Mid troposphare, tropopause and low stratosphare')+
+  theme(legend.position = 'bottom')+
+  theme(legend.title = element_blank())
+
+  
+```
+
+```{r}
+#for some reason my plot does not want to show the values of the Lower stratosphare column in the main plot - so i plotted it beside it - do you have any idea why this happens? I have tried a lot of different solutions, but it seems to be a very strange issue and i cant make it make sense
+
+```
