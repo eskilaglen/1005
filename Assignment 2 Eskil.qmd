@@ -1,0 +1,98 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#downloading packages 
+rm(list=ls()) 
+library(rvest)
+library(tidyverse)
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+#specifying URL and scraping data
+url <- "https://www.motor.no/aktuelt/motors-store-vintertest-av-rekkevidde-pa-elbiler/217132"
+
+page <- read_html(url)
+
+#making dataframe out of first table on the site
+
+motors <- page %>% 
+  html_nodes("table") %>% .[[1]] %>% html_table()
+
+#naming columns
+
+ names(motors) <- c("Modell (temp. varierte fra 0C til -10C)", "wltp","STOPP", "Avvik")
+
+# removing the first row, because they were the same as the column names, and not values
+ 
+motors = motors[-1,]
+
+#fetching "stringr" so i can remove the characters from my columns
+
+library(stringr)
+
+motors$`STOPP` <- str_replace(motors$`STOPP`, " km", "")
+
+motors$`wltp` <- str_replace(motors$`wltp`, " km", "")
+
+motors$`wltp` <- str_replace(motors$`wltp`, " kWh", "")
+
+
+motors$`wltp` <- sub("/.*", "", motors$`wltp`)
+
+#changing my data to numeric type
+
+motors$`STOPP` <- as.numeric(motors$`STOPP`)
+
+motors$`wltp` <- as.numeric(motors$`wltp`)
+
+#plotting numbers with 45 degree line 
+
+motors %>% 
+  ggplot() +
+  geom_point(aes(x = `wltp`,y = STOPP))+
+  geom_abline(slope = 1, intercept = 0, color = "red", label="Supposed range")+
+  scale_x_continuous(limits = c(200, 800))+
+  scale_y_continuous(limits = c(200, 800))+
+  labs(fill = NULL, title = "Car motors supposed range and actual range compared", x="Supposed range (km) ", y="Actual range before car stop (km)",)+
+   geom_text(x = 400, y = 500, label = "Expected Range", color = "red")
+```
+
+```{r}
+
+lm <- lm(STOPP ~ wltp, data = motors)
+
+lm
+
+#plotting "lm" into the ggplot
+
+motors %>% 
+  ggplot(aes(x = `wltp`,y = STOPP)) +
+  geom_point(aes(y=STOPP))+
+  geom_abline(slope = 1, intercept = 0, color = "red", label="Supposed range")+
+ geom_smooth(method = "lm")+
+  coord_cartesian(xlim = c(300, 600), ylim = c(300, 600))+
+  labs(fill = NULL, title = "Car  supposed range and actual range", x="Supposed range (km) ", y="Actual range before car stop (km)",)+
+   geom_text(x = 400, y = 500, label = "Expected Range", color = "red")+
+  theme_classic()
+  
+
+```
+
+```{r}
+#the coefficients that i get in the output tells me how my response variable (STOPP) changes as the predictor variable (wltp) changes. this tells me how much the STOPP variable changes for every one-unit increase in the WLTP variable. The intercept value tells me what the predicted STOPP value would be if the WLTP value was 0. In this case, the intercept value is -26.6450, which means that the predicted STOPP value would be -26.6450 if the WLTP value was 0. The coefficient for the WLTP variable is 0.8671, which means that for every one-unit increase in the WLTP variable, the predicted STOPP value increases by 0.8671
+```
