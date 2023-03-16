@@ -1,0 +1,78 @@
+---
+title: "Assignment 3"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+rm(list=ls()) 
+library(tidyverse)
+library(jsonlite)
+library(gdata)
+library(dplyr)
+library(ggrepel)
+library(ggplot2)
+```
+
+You can add options to executable code like this
+
+```{r}
+
+#fetching URL and making dataframe
+
+url <- "https://static01.nyt.com/newsgraphics/2021/12/20/us-coronavirus-deaths-2021/ff0adde21623e111d8ce103fedecf7ffc7906264/scatter.json"
+df <- fromJSON(url)
+```
+
+```{r}
+
+```
+
+```{r}
+
+#plotting with "geom_repel", so that the names of the states are more tidy plotted
+
+df %>%
+ggplot(aes(x=fully_vaccinated_pct_of_pop, y=deaths_per_100k))+
+  geom_point(alpha=0.5, color = "green")+
+  scale_x_continuous(breaks = seq(by = 10)) +
+  geom_text_repel(aes(label=name), size=2)+
+  labs(title = "Covid-19 deaths compared with vaccination rates", y="Avg montly deaths per 100 000", x= "Share of population fully vaccinated")+
+  scale_x_continuous(labels = scales::percent)+
+  annotate("segment", x=0.76, y=9, xend=0.77, yend=8, arrow=arrow(length = unit(0.3, "cm")), color="red")+
+  annotate("text",x = 0.73, y = 9.5,label = "Higher vaccination rate, lower death rate",color = "red",size = 1.8,)+
+    annotate("segment", x=0.56, y=17, xend=0.54, yend=18, arrow=arrow(length = unit(0.3, "cm")), color="red")+
+    annotate("text",x = 0.56, y = 16.8,label = "Lower vaccination rate, higher death rate",color = "red",size = 1.8,)
+```
+
+```{r}
+lm(deaths_per_100k ~ fully_vaccinated_pct_of_pop, data=df)
+
+```
+
+```{r}
+#The intercept value i get tells me that when the "fully vaccinated percentage of population" is at 0, the deaths per 100k would have a mean of 31.15. This is likely not very meaningful, as there is no states that have a 0% vaccination rate. The coefficient for vaccinated percentage of population is -36.66. This tells me that there is a negative correlation, and that if the vaccination percentage was to increase with 1%, the deaths per 100k would be expected to decrease with 36.66.
+
+#plotting with geom_smooth of the linear model
+
+df %>%
+ggplot(aes(x=fully_vaccinated_pct_of_pop, y=deaths_per_100k))+
+  geom_point(alpha=0.5, color = "green")+
+  geom_smooth(method=lm)+
+  scale_x_continuous(breaks = seq(by = 10)) +
+  geom_text_repel(aes(label=name), size=2)+
+  labs(title = "Covid-19 deaths compared with vaccination rates", y="Avg montly deaths per 100 000", x= "Share of population fully vaccinated")+
+  scale_x_continuous(labels = scales::percent)+
+  annotate("segment", x=0.76, y=9, xend=0.77, yend=8, arrow=arrow(length = unit(0.3, "cm")), color="red")+
+  annotate("text",x = 0.73, y = 9.5,label = "Higher vaccination rate, lower death rate",color = "red",size = 1.8,)+
+    annotate("segment", x=0.56, y=17, xend=0.54, yend=18, arrow=arrow(length = unit(0.3, "cm")), color="red")+
+    annotate("text",x = 0.56, y = 16.8,label = "Lower vaccination rate, higher death rate",color = "red",size = 1.8,)
+```
