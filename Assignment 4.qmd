@@ -1,0 +1,217 @@
+---
+title: "Assignment 4"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+rm(list=ls()) 
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(rvest)
+library(anytime)
+```
+
+```{r}
+#fetching data
+df <- read_csv("https://raw.githubusercontent.com/uit-sok-1005-v23/uit-sok-1005-v23.github.io/main/storedata.csv")
+
+head(df)
+```
+
+```{r}
+
+#tidying ddata
+
+df <- df %>%
+  rename(date=Order_Date, price=Unit_Price, quantity = Order_Quantity)
+
+table1 <- df %>%
+  select(date, Customer_Segment, Region, Sales)
+
+table1 <- table1 %>%
+  pivot_wider(names_from = Customer_Segment, values_from = Sales, values_fn = sum)
+
+table1 <- table1 %>%
+  select(date, Corporate,Consumer, Region)
+
+
+
+table1 <- table1 %>%
+  pivot_longer(2:3,names_to = "Customer_segment", values_to="value")
+
+#selecting the regions i want
+
+table1 <- table1 %>%
+subset(Region %in% c("Region 1", "Region 9"))
+
+# converting date to a proper date format
+
+table1 <- table1 %>% 
+  mutate(date = ymd(date)) %>% 
+  filter(month(date) %in% c(10, 11, 12) & year(date) == 2017) 
+
+table1 <- table1 %>%
+    group_by(month = format(date, "%m"), year = format(date, "%Y"), Region,Customer_segment) %>%
+  summarise(total_sales = sum(value, na.rm = TRUE))
+
+
+#filtering out the years i want
+
+figure1 <- df %>%
+    filter(year(date) >= 2015) %>%
+    filter(year(date) <= 2018)
+
+figure1 <- figure1 %>%
+  subset(Region %in% c("Region 1", "Region 13"))
+
+#calculating monthly sales
+figure1 <- figure1 %>%
+  mutate(date = ymd(date),year_month = floor_date(date, unit = "month")) %>% 
+  group_by(year_month, Region) %>% 
+  summarise(monthly_sales = sum(Sales))
+
+figure1 %>%
+  ggplot(aes(x=year_month, y=monthly_sales, col=Region)) +
+  geom_point(size=1)+
+  geom_smooth()+
+labs(title = "Figure 1",y="Monthly sales", x="Year")
+```
+
+```{r}
+figure1 <- figure1 %>%
+pivot_wider(names_from = Region, values_from = monthly_sales)
+
+table2 <- filter(figure1, `Region 13` > `Region 1`)
+
+table3 <- df %>%
+ select(date, Customer_Segment, Region, Profit, Product_Category)
+
+#selecting all regions except 3,5 and 8
+
+table3 <- table3 %>%
+  subset(Region %in% c("Region 1", "Region 2", "Region 4","Region 6","Region 7","Region 9","Region 10","Region 11","Region 12","Region 13"))
+
+#calculating average profit
+
+avg_profit <- aggregate(Profit ~ Customer_Segment + Product_Category, data = table3, mean)
+
+##the corporate segment produced the biggest profit, specifically on the technology category
+```
+
+```{r}
+#fetching data using download.file() - when i tried to use the web page, my data stopped at 2013, no matter what i did. I couldnt figure out another way to do this
+
+url <- "https://query1.finance.yahoo.com/v7/finance/download/XOM?period1=1262563200&period2=1680652800&interval=1d&events=history&includeAdjustedClose=true"
+
+download.file(url, destfile = "XOM.csv")
+
+df <- read_csv("XOM.csv")
+
+#making new dataframe with selected columns
+exxon <- df[,c("Date", "Adj Close", "Volume")]
+
+exxon <- exxon %>%
+  rename(adclose = `Adj Close`)
+
+#tidying my dates so that i can group_by and eventually merge
+
+exxon$Date <- as.Date(exxon$Date, format = "%Y-%m-%d")
+exxon$year <- format(exxon$Date, "%Y")
+exxon$month <- format(exxon$Date, "%m")
+
+exxon <- na.omit(exxon)
+
+exxon <- exxon %>%
+  group_by(year, month) %>%
+  summarise(exxon = weighted.mean(adclose, Volume))
+
+exxon <- subset(exxon, year <= 2022)
+
+  
+```
+
+```{r}
+
+#fetching data
+
+url <- "https://fred.stlouisfed.org/graph/fredgraph.csv?bgcolor=%23e1e9f0&chart_type=line&drp=0&fo=open%20sans&graph_bgcolor=%23ffffff&height=450&mode=fred&recession_bars=off&txtcolor=%23444444&ts=12&tts=12&width=1318&nt=0&thu=0&trc=0&show_legend=yes&show_axis_titles=yes&show_tooltip=yes&id=DCOILBRENTEU&scale=left&cosd=2010-01-04&coed=2022-12-31&line_color=%234572a7&link_values=false&line_style=solid&mark_type=none&mw=3&lw=2&ost=-99999&oet=99999&mma=0&fml=a&fq=Daily&fam=avg&fgst=lin&fgsnd=2020-02-01&line_index=1&transformation=lin&vintage_date=2023-04-05&revision_date=2023-04-05&nd=1987-05-20"
+
+df1 <- read_csv(url)
+
+df1<- df1 %>%
+  rename(oprice = DCOILBRENTEU)
+
+#converting to correct types from character and tidying data
+
+df1$oprice <- as.numeric(df1$oprice)
+
+df1 <- df1 %>%
+  mutate(month = floor_date(DATE, unit = "month"))
+
+df1$DATE <- as.Date(df1$DATE, format = "%Y-%m-%d")
+df1$year <- format(df1$DATE, "%Y")
+df1$month <- format(df1$DATE, "%m")
+
+#removing NA values
+
+df1 <- na.omit(df1)
+
+#calculating arithmetic average monthly price
+
+df1 <- df1 %>%
+  group_by(year, month) %>%
+  summarise(oil = mean(oprice))
+
+  
+```
+
+```{r}
+
+#mergin datasets together
+
+combined <- merge(df1, exxon, by = c("year", "month"))
+
+combined$date <- paste(combined$year, combined$month, "01", sep="-")
+combined$date <- as.Date(combined$date)
+
+combined <- combined %>%
+  pivot_longer(3:4, names_to = "var", values_to = "value")
+
+#plotting 
+combined %>% 
+  ggplot(aes(x= date, y=value, col = var)) +
+  geom_line(size=1) +
+  labs(title="Exxon stock price compared to Crude Oil price per barrel",
+       y ="Monthly averages(dollars)", x= "Date", color="") 
+
+```
+
+```{r}
+combined <- combined %>%
+  pivot_wider(names_from = var, values_from = value)
+
+lm(exxon ~ oil, data=combined)
+
+#The output of the linear regression model shows two estimated coefficients:
+#The Intercept of the exxon stock price when the oil prices is zero. In this case, the intercept is 48.1373.
+
+#The coefficient for oil: This tells us how the exxon stock market price changes for each unit increase in oil prices. In this case, the coefficient is 0.1282, which means that for each one dollar increase in oil prices, the exxon stock market price is expected to increase by 0.1282 dollars, on average.
+
+#Therefore, we can interpret the estimated coefficient for the oil variable as a measure of the relationship between oil prices and exxon stock market prices. Specifically, it indicates the expected change in exxon stock market prices for each unit increase in oil prices, while holding all other factors constant.
+
+```
+
+```{r}
+
+```
