@@ -1,0 +1,134 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+```{r}
+rm(list=ls())
+suppressPackageStartupMessages({
+  library(haven)
+  library(foreign)
+  library(dplyr)
+  library(stringr)
+  library(tidyverse)
+  library(lubridate)})
+```
+
+```{r}
+#vi har her hentet data fra Dominicks dataset og fulgt datamanualen - https://www.chicagobooth.edu/-/media/enterprise/centers/kilts/datasets/dominicks-dataset/dominicks-manual-and-codebook_kiltscenter
+
+#henter data
+
+df_upc = read.csv("https://www.chicagobooth.edu/-/media/enterprise/centers/kilts/datasets/dominicks-dataset/upc_csv-files/upccra.csv?la=en&hash=32A1CD1EF429D68739ED6A4EA5EC64F6EB6392CE") 
+
+df_demo = read.dta("~/Downloads/demo.dta")
+
+df_ccount = read.dta("~/Downloads/ccount.dta") 
+
+df_movement = read.csv("~/Downloads/wcra.csv")
+```
+
+```{r}
+#fjerner "na" verdier for alle dataset
+df_upc <- na.omit(df_upc)
+
+df_ccount <- na.omit(df_ccount)
+
+df_movement <- na.omit(df_movement)
+```
+
+```{r}
+#velger ut merker
+#lager en vector for våre valgte merker og filtrerer for disse. Lager en ny kolonne med disse 
+Merker <- c("NAB", "OLD", "KEEBLER", "SUNSHINE", "SALERNO")
+df_upc <- df_upc %>%
+  filter(str_detect(DESCRIP, str_c(Merker, collapse = "|"))) %>%
+  mutate(BRAND = str_extract(DESCRIP, "NAB|OLD|KEEBLER|SUNSHINE|SALERNO"))
+
+#fjerner alle rows uten "move" verdier, lager totalt salg i dollar, og velger uker i 1990
+
+df_movement_upc <- df_upc %>%
+  merge(df_movement, by = 'UPC') %>%
+  group_by(WEEK, STORE) %>%
+  filter(MOVE > 0) %>% 
+  mutate(SALES = PRICE * MOVE / QTY) %>% 
+  filter(WEEK >= 17, WEEK <= 67) 
+
+```
+
+```{r}
+
+#setter datotype for "date" 
+df_ccount <- df_ccount %>%
+  mutate(date = as.Date(date, format = "%y%m%d")) 
+
+#velger ut relevante datoer 
+  df_ccount <- df_ccount %>%
+  filter(between(date, as.Date('1990-01-01'), as.Date('1990-12-31')))
+
+#endrer navn på kolonner for enkelthets skyld  
+  
+df_ccount <- df_ccount %>% 
+  rename(STORE = store) %>%
+  rename(WEEK = week)
+
+
+#grupperer for uke og butikk og summerer de angitte kolonnene for hver kombinasjon av disse og uke og butikk
+df_ccount <- df_ccount %>%   
+  group_by(WEEK,STORE) %>% 
+  summarise_at(.vars = c("grocery","dairy","frozen","bottle","mvpclub","groccoup","meat","meatfroz","meatcoup","fish","fishcoup", "promo","promcoup", "produce",  "bulk","saladbar","prodcoup","bulkcoup","salcoup","floral","florcoup", "deli", "deliself", "deliexpr","convfood", "cheese","delicoup","bakery" , "pharmacy", "pharcoup", "gm" , "jewelry", "cosmetic","haba","gmcoup",   "camera" ,  "photofin" ,"video"  , "videoren", "vidcoup" , "beer" , "wine" ,"spirits" , "miscscp" , "mancoup" , "custcoun", "ftgchin" , "ftgccoup","ftgital" , "ftgicoup" ,"daircoup" ,"frozcoup", "habacoup" ,"photcoup" ,"cosmcoup", "ssdelicp" ,"bakcoup" , "liqcoup"), .funs = sum) 
+
+
+#grupperer for uke,salg,merker og butikk, og kalkulerer sum og gjennomsnitt for viktige verdier
+
+df_movement_upc <- df_movement_upc %>% 
+  group_by(STORE, WEEK, BRAND, SALE, ) %>%
+  summarise(
+            Movement_sum = sum(MOVE),
+            Price_average = mean(PRICE),
+            Sale_sum = sum(SALES),
+            Profit_sum = Sale_sum*(PROFIT/100))
+
+#"merger" sammen movement og ccount datasettene
+df_upc_movement_ccount <- merge(df_movement_upc, df_ccount, by= c("STORE","WEEK"))
+```
+
+```{r}
+#velger ut relevant data
+df_demo <- df_demo[, 1:16]
+#bytter navn så vi kan merge
+df_demo <- df_demo %>%
+  rename(STORE = store)
+
+#merger denne inn i det andre dataframen etter butikk
+df <- merge(df_demo, df_upc_movement_ccount, by = "STORE")
+
+```
+
+```{r}
+
+
+#flytter relevante kolonner for bedre oversikt
+df <- df%>%
+  relocate( Movement_sum,  .before = zip) %>%
+    relocate(Price_average,  .before = zip) %>%
+    relocate(Sale_sum ,  .before = zip) %>%
+    relocate(Profit_sum,  .before = zip) %>%
+    relocate(WEEK,  .after = STORE) %>%
+    relocate(custcoun,  .after = STORE)
+#fjerner uønsket data
+df <- df[, -c(25:81)]
+
+df <- df %>%
+  select(-zip,-weekvol,-scluster, -zone, -age9, -age60, -nocar,-educ)
+#fjerner duplikate kolonner
+df <- df %>% 
+  distinct()
+  
+```
+
+```{r}
+#lager den ferdige "df"
+write_csv(df, "df.csv") 
+```
